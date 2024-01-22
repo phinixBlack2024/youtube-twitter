@@ -1,9 +1,11 @@
 
+import { verify } from "crypto"
 import { userMode } from "../models/user.model.js"
 import { apiError } from "../utils/apiError.js"
 import apiResponse from "../utils/apiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import uploadOnCloud from "../utils/cloudnary.js"
+import Jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -76,7 +78,7 @@ const loginUser = asyncHandler(async (req, res) => {
     secure: true
   }
   // userMode.is
-  return res.status(200).cookie("accessToken", generateAcessToken, option).cookie("refreshToken", refreshToken, option).json(new apiResponse(200, { generateAcessToken, refreshToken }, "userLogged in successfulley"))
+  return res.status(200).cookie("accessToken", generateAcessToken, option).cookie("refreshToken", refreshToken, option).json(new apiResponse(200,  "userLogged in successfulley",{ generateAcessToken, refreshToken }))
 });
 
 const logOut = asyncHandler(async (req, res) => {
@@ -89,6 +91,46 @@ const logOut = asyncHandler(async (req, res) => {
   }
 
   res.status(200).cookie("accessToken", option).cookie("refreshToken", option).json(new apiResponse(200, {}, "userLogout in successfulley"))
-})
+});
 
-export { registerUser, loginUser, logOut }
+
+const userList = asyncHandler(async (req, res) => {
+  const userList = await userMode.find().select("-password -refreshToken");
+  res.status(200).json(new apiResponse(200, userList, "registed"))
+});
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  let incominRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+  if (!incominRefreshToken) {
+    throw new apiError(401, "unauthorize request")
+  }
+  try {
+   let decodedToken = Jwt.verify(incominRefreshToken ,process.env.REFRESH_TOKEN_SECRET)
+    if (!decodedToken._id) {
+      throw new apiError(401, "invalid refresh token")
+    }
+   
+    let userDetails = await userMode.findById(decodedToken._id)
+ 
+    if (!userDetails) {
+      throw new apiError(401, "invalid refresh token")
+    }
+    if (incominRefreshToken !== userDetails?.refreshToken) {
+      throw new apiError(401, "refresh token expired")
+    }
+ 
+     const { newGenerateAcessToken, newRefreshToken } = await generateAccessAndRefreshTokens(decodedToken._id)
+
+    const option = {
+      httpOnly: true,
+      secure: true
+    }
+    return res.status(200).cookie("accessToken", newGenerateAcessToken, option).cookie("refreshToken", newRefreshToken, option).json(new apiResponse(200, "access token refresh token", { newGenerateAcessToken, newRefreshToken }));
+  } catch (error) {
+    throw new apiError(401, error?.message || "invalid refresh token") 
+  }
+ 
+
+});
+
+export { registerUser, loginUser, logOut, userList, refreshAccessToken }
