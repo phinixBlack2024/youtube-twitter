@@ -10,7 +10,6 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
             throw new apiError(401, "Unauthroize request");
         }
         let decorderToken;
-        console.log(token);
        try {
          decorderToken = await Jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
        } catch (error) {

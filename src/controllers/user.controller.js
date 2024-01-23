@@ -78,7 +78,7 @@ const loginUser = asyncHandler(async (req, res) => {
     secure: true
   }
   // userMode.is
-  return res.status(200).cookie("accessToken", generateAcessToken, option).cookie("refreshToken", refreshToken, option).json(new apiResponse(200,  "userLogged in successfulley",{ generateAcessToken, refreshToken }))
+  return res.status(200).cookie("accessToken", generateAcessToken, option).cookie("refreshToken", refreshToken, option).json(new apiResponse(200, "userLogged in successfulley", { generateAcessToken, refreshToken }))
 });
 
 const logOut = asyncHandler(async (req, res) => {
@@ -105,21 +105,21 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new apiError(401, "unauthorize request")
   }
   try {
-   let decodedToken = Jwt.verify(incominRefreshToken ,process.env.REFRESH_TOKEN_SECRET)
+    let decodedToken = Jwt.verify(incominRefreshToken, process.env.REFRESH_TOKEN_SECRET)
     if (!decodedToken._id) {
       throw new apiError(401, "invalid refresh token")
     }
-   
+
     let userDetails = await userMode.findById(decodedToken._id)
- 
+
     if (!userDetails) {
       throw new apiError(401, "invalid refresh token")
     }
     if (incominRefreshToken !== userDetails?.refreshToken) {
       throw new apiError(401, "refresh token expired")
     }
- 
-     const { newGenerateAcessToken, newRefreshToken } = await generateAccessAndRefreshTokens(decodedToken._id)
+
+    const { newGenerateAcessToken, newRefreshToken } = await generateAccessAndRefreshTokens(decodedToken._id)
 
     const option = {
       httpOnly: true,
@@ -127,10 +127,26 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
     return res.status(200).cookie("accessToken", newGenerateAcessToken, option).cookie("refreshToken", newRefreshToken, option).json(new apiResponse(200, "access token refresh token", { newGenerateAcessToken, newRefreshToken }));
   } catch (error) {
-    throw new apiError(401, error?.message || "invalid refresh token") 
+    throw new apiError(401, error?.message || "invalid refresh token")
   }
- 
+
 
 });
 
-export { registerUser, loginUser, logOut, userList, refreshAccessToken }
+const changeUserPassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword, confirmPassword } = req.body
+  const userId = req.user?._id;
+  if (confirmPassword != newPassword) {
+    throw new apiError(401, "The passwords entered do not match. Please ensure that the new password and the confirmed password are identical.")
+  }
+  let userDetails = await userMode.findById(userId);
+  let passwordCheck = await userDetails.isPasswordCorret(oldPassword)
+  if (!passwordCheck) {
+    throw new apiError(401, "The provided old password is incorrect.")
+  }
+  userDetails.password = newPassword
+  await userDetails.save({ validateBeforeSave: false })
+  res.status(200).json(new apiResponse(200, {}, "Password changed successfully."))
+});
+
+export { registerUser, loginUser, logOut, userList, refreshAccessToken, changeUserPassword }
